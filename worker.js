@@ -2,13 +2,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. जब कोई डायरेक्ट वीडियो देखने वाले लिंक पर क्लिक करे (?id=...)
     const videoId = url.searchParams.get('id');
     if (videoId) {
       return handleVideoPlayback(videoId);
     }
 
-    // 2. Telegram Bot Webhook
     if (request.method === 'POST') {
       try {
         const update = await request.json();
@@ -37,7 +35,8 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    return new Response(JSON.stringify({ error: true, message: "M3U8 Worker is active!" }), {
+    // 🔥 यह चेक करने के लिए कि नया कोड आ गया है या नहीं
+    return new Response(JSON.stringify({ status: "success", version: "NEW_M3U8_PLAYER_V2_ACTIVE" }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200
     });
@@ -81,7 +80,7 @@ async function handleVideoPlayback(videoId) {
             if ([301, 302, 303, 307, 308].includes(redirectRes.status)) {
               const location = redirectRes.headers.get('Location');
               if (location) {
-                currentUrl = location.startsWith('http') ? location : new URL(location, currentUrl).href;
+                currentUrl = location.startswith('http') ? location : new URL(location, currentUrl).href;
                 finalM3u8Url = currentUrl;
                 continue;
               }
@@ -97,7 +96,6 @@ async function handleVideoPlayback(videoId) {
           }
         } catch (err) {}
 
-        // HLS.js का इस्तेमाल करके एकदम प्रोफेशनल M3U8 प्लेयर (जैसे स्क्रीनशॉट में है)
         const html = `
           <!DOCTYPE html>
           <html lang="en">
@@ -149,7 +147,6 @@ async function sendTelegramMessage(chatId, text) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: text 
-                         })
+    body: JSON.stringify({ chat_id: chatId, text: text })
   });
 }
