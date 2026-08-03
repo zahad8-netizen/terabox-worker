@@ -21,7 +21,7 @@ export default {
               const workerDomain = url.origin;
               const watchLink = `${workerDomain}/?id=${extractedId}`;
               
-              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा डायरेक्ट देखने वाला लिंक तैयार है:\n\n${watchLink}`);
+              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा एकदम पक्का डायरेक्ट वॉच लिंक तैयार है:\n\n${watchLink}`);
             } else {
               await sendTelegramMessage(chatId, "❌ भाई सही Terabox लिंक भेज।");
             }
@@ -44,16 +44,44 @@ export default {
 
 async function handleVideoPlayback(videoId) {
   try {
-    const apiUrl = `https://terabox.beer/api/terabox-new?link=https://terabox.com/s/${videoId}`;
+    const teraboxFullLink = `https://terabox.com/s/${videoId}`;
+    const apiUrl = `https://terabox.beer/api/terabox-new?link=${encodeURIComponent(teraboxFullLink)}`;
+    
     const apiRes = await fetch(apiUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
+        'Referer': 'https://terabox.beer/'
+      }
     });
     const data = await apiRes.json();
 
     if (data && data.error === false) {
-      const videoUrl = data.stream_download_url || data.url || (data.list && data.list[0] && data.list[0].dlink);
+      let videoUrl = data.stream_download_url || data.download_link || data.fallback_url || data.proxy_url || data.url || data.video_url;
       
+      if (!videoUrl && data.list && data.list[0]) {
+        videoUrl = data.list[0].dlink || data.list[0].url;
+      }
+
       if (videoUrl) {
+        // रीडायरेक्ट या m3u8 चेक करने के लिए
+        let finalVideoUrl = videoUrl;
+        try {
+          const redirectRes = await fetch(videoUrl, {
+            method: 'GET',
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            redirect: 'follow'
+          });
+          const text = await redirectRes.text();
+          const m3u8Match = text.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
+          if (m3u8Match && m3u8Match[1]) {
+            finalVideoUrl = m3u8Match[1];
+          } else if (redirectRes.url) {
+            finalVideoUrl = redirectRes.url;
+          }
+        } catch (err) {
+          // अगर रीडायरेक्ट चेक फेल हो तो ओरिजिनल यूआरएल यूज़ करेगा
+        }
+
         const html = `
           <!DOCTYPE html>
           <html lang="en">
@@ -67,7 +95,7 @@ async function handleVideoPlayback(videoId) {
               </style>
           </head>
           <body>
-              <video controls autoplay src="${videoUrl}"></video>
+              <video controls autoplay src="${finalVideoUrl}"></video>
           </body>
           </html>
         `;
@@ -76,7 +104,7 @@ async function handleVideoPlayback(videoId) {
         });
       }
     }
-    return new Response("Could not fetch playable video link", { status: 500 });
+    return new Response("Could not fetch playable video link from API", { status: 500 });
   } catch (err) {
     return new Response(err.message, { status: 500 });
   }
@@ -88,6 +116,5 @@ async function sendTelegramMessage(chatId, text) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text: text })
- 
   });
 }
