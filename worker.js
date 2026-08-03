@@ -35,7 +35,7 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    return new Response(JSON.stringify({ status: "success", version: "SYNTAX_FIXED_V4" }), {
+    return new Response(JSON.stringify({ status: "success", version: "CLEAN_V5" }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200
     });
@@ -91,8 +91,6 @@ async function handleVideoPlayback(videoId) {
             }
 
             const htmlText = await redirectRes.text();
-            
-            // Fixed Regex without syntax errors
             const m3u8Match = htmlText.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
                               
             if (m3u8Match && m3u8Match[1]) {
