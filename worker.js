@@ -2,13 +2,13 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. अगर ब्राउज़र से डायरेक्ट वीडियो देखने आए (?id=...)
+    // 1. जब कोई डायरेक्ट वीडियो देखने वाले लिंक पर क्लिक करे (?id=...)
     const videoId = url.searchParams.get('id');
     if (videoId) {
       return handleVideoPlayback(videoId);
     }
 
-    // 2. Telegram Bot Webhook हैंडलर
+    // 2. Telegram Bot Webhook
     if (request.method === 'POST') {
       try {
         const update = await request.json();
@@ -23,12 +23,12 @@ export default {
               const workerDomain = url.origin;
               const watchLink = `${workerDomain}/?id=${extractedId}`;
               
-              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा परमानेंट डायरेक्ट वॉच लिंक तैयार है (मक्खन की तरह चलेगा):\n\n${watchLink}`);
+              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा परमानेंट M3U8 वॉच लिंक तैयार है:\n\n${watchLink}`);
             } else {
               await sendTelegramMessage(chatId, "❌ भाई सही Terabox लिंक भेज।");
             }
           } else {
-            await sendTelegramMessage(chatId, "👋 मियाँ भाई! मुझे Terabox का लिंक भेज, मैं तुझे तुरंत ऑनलाइन चलने वाला डायरेक्ट लिंक देता हूँ।");
+            await sendTelegramMessage(chatId, "👋 मियाँ भाई! मुझे Terabox का लिंक भेज, मैं तुझे तुरंत M3U8 डायरेक्ट लिंक देता हूँ।");
           }
         }
       } catch (e) {
@@ -37,7 +37,7 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    return new Response(JSON.stringify({ error: true, message: "Worker is active and running perfectly!" }), {
+    return new Response(JSON.stringify({ error: true, message: "M3U8 Worker is active!" }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200
     });
@@ -51,7 +51,7 @@ async function handleVideoPlayback(videoId) {
     
     const apiRes = await fetch(apiUrl, {
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'https://terabox.beer/'
       }
     });
@@ -65,15 +65,14 @@ async function handleVideoPlayback(videoId) {
       }
 
       if (videoUrl) {
-        let finalVideoUrl = videoUrl;
+        let finalM3u8Url = videoUrl;
         try {
-          // पाइथन वाले लॉजिक की तरह रीडायरेक्ट और m3u8 ढूंढने के लिए[span_1](start_span)[span_1](end_span)
           let currentUrl = videoUrl;
           for (let i = 0; i < 5; i++) {
             const redirectRes = await fetch(currentUrl, {
               method: 'GET',
               headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
                 'Referer': 'https://terabox.beer/'
               },
               redirect: 'manual'
@@ -83,37 +82,54 @@ async function handleVideoPlayback(videoId) {
               const location = redirectRes.headers.get('Location');
               if (location) {
                 currentUrl = location.startsWith('http') ? location : new URL(location, currentUrl).href;
-                finalVideoUrl = currentUrl;
+                finalM3u8Url = currentUrl;
                 continue;
               }
             }
 
-            const text = await redirectRes.text();
-            const m3u8Match = text.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
+            const htmlText = await redirectRes.text();
+            const m3u8Match = htmlText.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
             if (m3u8Match && m3u8Match[1]) {
-              finalVideoUrl = m3u8Match[1];
+              finalM3u8Url = m3u8Match[1];
               break;
             }
             break;
           }
-        } catch (err) {
-          // अगर रीडायरेक्ट फॉलो करने में दिक्कत आए तो ओरिजिनल यूआरएल यूज़ करेगा[span_2](start_span)[span_2](end_span)
-        }
+        } catch (err) {}
 
+        // HLS.js का इस्तेमाल करके एकदम प्रोफेशनल M3U8 प्लेयर (जैसे स्क्रीनशॉट में है)
         const html = `
           <!DOCTYPE html>
           <html lang="en">
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Direct Video Player</title>
+              <title>M3U8 Player</title>
+              <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
               <style>
                   body { background: #000; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; }
-                  video { width: 100%; max-width: 900px; max-height: 90vh; outline: none; }
+                  video { width: 100%; max-width: 1000px; max-height: 100vh; outline: none; }
               </style>
           </head>
           <body>
-              <video controls autoplay src="${finalVideoUrl}"></video>
+              <video id="video" controls autoplay></video>
+              <script>
+                  var video = document.getElementById('video');
+                  var videoSrc = "${finalM3u8Url}";
+                  if (Hls.isSupported()) {
+                      var hls = new Hls();
+                      hls.loadSource(videoSrc);
+                      hls.attachMedia(video);
+                      hls.on(Hls.Events.MANIFEST_PARSED,function() {
+                          video.play();
+                      });
+                  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                      video.src = videoSrc;
+                      video.addEventListener('loadedmetadata',function() {
+                          video.play();
+                      });
+                  }
+              </script>
           </body>
           </html>
         `;
@@ -122,7 +138,7 @@ async function handleVideoPlayback(videoId) {
         });
       }
     }
-    return new Response("Could not fetch playable video link", { status: 500 });
+    return new Response("Could not generate M3U8 stream", { status: 500 });
   } catch (err) {
     return new Response(err.message, { status: 500 });
   }
@@ -133,7 +149,7 @@ async function sendTelegramMessage(chatId, text) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: text
+    body: JSON.stringify({ chat_id: chatId, text: text 
                          })
   });
-  }
+}
