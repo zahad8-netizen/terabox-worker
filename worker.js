@@ -35,8 +35,7 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    // 🔥 यह चेक करने के लिए कि नया कोड आ गया है या नहीं
-    return new Response(JSON.stringify({ status: "success", version: "NEW_M3U8_PLAYER_V2_ACTIVE" }), {
+    return new Response(JSON.stringify({ status: "success", version: "NEW_M3U8_PLAYER_V3_FIXED" }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200
     });
@@ -50,11 +49,18 @@ async function handleVideoPlayback(videoId) {
     
     const apiRes = await fetch(apiUrl, {
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://terabox.beer/'
       }
     });
-    const data = await apiRes.json();
+    
+    const textData = await apiRes.text();
+    let data;
+    try {
+      data = JSON.parse(textData);
+    } catch (e) {
+      return new Response("API returned non-JSON response (Blocked or down)", { status: 500 });
+    }
 
     if (data && data.error === false) {
       let videoUrl = data.stream_download_url || data.download_link || data.fallback_url || data.proxy_url || data.url || data.video_url;
@@ -67,7 +73,7 @@ async function handleVideoPlayback(videoId) {
         let finalM3u8Url = videoUrl;
         try {
           let currentUrl = videoUrl;
-          for (let i = 0; i < 5; i++) {
+          for (let i = 0; i < 3; i++) {
             const redirectRes = await fetch(currentUrl, {
               method: 'GET',
               headers: { 
@@ -80,7 +86,8 @@ async function handleVideoPlayback(videoId) {
             if ([301, 302, 303, 307, 308].includes(redirectRes.status)) {
               const location = redirectRes.headers.get('Location');
               if (location) {
-                currentUrl = location.startswith('http') ? location : new URL(location, currentUrl).href;
+                // FIXED: startsWith (capital S)
+                currentUrl = location.startsWith('http') ? location : new URL(location, currentUrl).href;
                 finalM3u8Url = currentUrl;
                 continue;
               }
@@ -136,9 +143,9 @@ async function handleVideoPlayback(videoId) {
         });
       }
     }
-    return new Response("Could not generate M3U8 stream", { status: 500 });
+    return new Response("Could not generate M3U8 stream from API data", { status: 500 });
   } catch (err) {
-    return new Response(err.message, { status: 500 });
+    return new Response("Error: " + err.message, { status: 500 });
   }
 }
 
@@ -149,4 +156,4 @@ async function sendTelegramMessage(chatId, text) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text: text })
   });
-}
+    }
