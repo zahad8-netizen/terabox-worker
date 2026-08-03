@@ -35,7 +35,7 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    return new Response(JSON.stringify({ status: "success", version: "PYTHON_LOGIC_M3U8_FIXED" }), {
+    return new Response(JSON.stringify({ status: "success", version: "SYNTAX_FIXED_V4" }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200
     });
@@ -71,7 +71,6 @@ async function handleVideoPlayback(videoId) {
       }
 
       if (videoUrl) {
-        // Python style redirect & m3u8 extractor logic
         let finalM3u8Url = videoUrl;
         let currentUrl = videoUrl;
         
@@ -93,16 +92,13 @@ async function handleVideoPlayback(videoId) {
 
             const htmlText = await redirectRes.text();
             
-            // Regex patterns from your python code to find m3u8
-            const m3u8Match = htmlText.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/) ||
-                              htmlText.match(/(https?:\/\/[^\s"'<>]+/playlist\.m3u8[^\s"'<>]*)/);
+            // Fixed Regex without syntax errors
+            const m3u8Match = htmlText.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
                               
             if (m3u8Match && m3u8Match[1]) {
               finalM3u8Url = m3u8Match[1];
               break;
             }
-            
-            // Agar HTML ke andar direct videoUrl hi mila toh wahi use hoga
             break;
           } catch (err) {
             break;
