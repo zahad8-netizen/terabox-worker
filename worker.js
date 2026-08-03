@@ -35,7 +35,7 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    return new Response(JSON.stringify({ status: "success", version: "CLEAN_V5" }), {
+    return new Response(JSON.stringify({ status: "success", version: "MOBILE_FIXED_V6" }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200
     });
@@ -91,10 +91,10 @@ async function handleVideoPlayback(videoId) {
             }
 
             const htmlText = await redirectRes.text();
-            const m3u8Match = htmlText.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
+            const m3u8Match = htmlText.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*/);
                               
-            if (m3u8Match && m3u8Match[1]) {
-              finalM3u8Url = m3u8Match[1];
+            if (m3u8Match) {
+              finalM3u8Url = m3u8Match[0];
               break;
             }
             break;
@@ -154,6 +154,7 @@ async function sendTelegramMessage(chatId, text) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: text })
+    body: JSON.stringify({ chat_id: chatId, text: text
+                         })
   });
 }
