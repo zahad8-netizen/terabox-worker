@@ -2,11 +2,13 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // 1. अगर ब्राउज़र से डायरेक्ट वीडियो देखने आए (?id=...)
     const videoId = url.searchParams.get('id');
     if (videoId) {
       return handleVideoPlayback(videoId);
     }
 
+    // 2. Telegram Bot Webhook हैंडलर
     if (request.method === 'POST') {
       try {
         const update = await request.json();
@@ -21,7 +23,7 @@ export default {
               const workerDomain = url.origin;
               const watchLink = `${workerDomain}/?id=${extractedId}`;
               
-              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा एकदम पक्का डायरेक्ट वॉच लिंक तैयार है:\n\n${watchLink}`);
+              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा परमानेंट डायरेक्ट वॉच लिंक तैयार है (मक्खन की तरह चलेगा):\n\n${watchLink}`);
             } else {
               await sendTelegramMessage(chatId, "❌ भाई सही Terabox लिंक भेज।");
             }
@@ -63,23 +65,39 @@ async function handleVideoPlayback(videoId) {
       }
 
       if (videoUrl) {
-        // रीडायरेक्ट या m3u8 चेक करने के लिए
         let finalVideoUrl = videoUrl;
         try {
-          const redirectRes = await fetch(videoUrl, {
-            method: 'GET',
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-            redirect: 'follow'
-          });
-          const text = await redirectRes.text();
-          const m3u8Match = text.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
-          if (m3u8Match && m3u8Match[1]) {
-            finalVideoUrl = m3u8Match[1];
-          } else if (redirectRes.url) {
-            finalVideoUrl = redirectRes.url;
+          // पाइथन वाले लॉजिक की तरह रीडायरेक्ट और m3u8 ढूंढने के लिए[span_1](start_span)[span_1](end_span)
+          let currentUrl = videoUrl;
+          for (let i = 0; i < 5; i++) {
+            const redirectRes = await fetch(currentUrl, {
+              method: 'GET',
+              headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://terabox.beer/'
+              },
+              redirect: 'manual'
+            });
+
+            if ([301, 302, 303, 307, 308].includes(redirectRes.status)) {
+              const location = redirectRes.headers.get('Location');
+              if (location) {
+                currentUrl = location.startsWith('http') ? location : new URL(location, currentUrl).href;
+                finalVideoUrl = currentUrl;
+                continue;
+              }
+            }
+
+            const text = await redirectRes.text();
+            const m3u8Match = text.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
+            if (m3u8Match && m3u8Match[1]) {
+              finalVideoUrl = m3u8Match[1];
+              break;
+            }
+            break;
           }
         } catch (err) {
-          // अगर रीडायरेक्ट चेक फेल हो तो ओरिजिनल यूआरएल यूज़ करेगा
+          // अगर रीडायरेक्ट फॉलो करने में दिक्कत आए तो ओरिजिनल यूआरएल यूज़ करेगा[span_2](start_span)[span_2](end_span)
         }
 
         const html = `
@@ -104,7 +122,7 @@ async function handleVideoPlayback(videoId) {
         });
       }
     }
-    return new Response("Could not fetch playable video link from API", { status: 500 });
+    return new Response("Could not fetch playable video link", { status: 500 });
   } catch (err) {
     return new Response(err.message, { status: 500 });
   }
@@ -115,6 +133,7 @@ async function sendTelegramMessage(chatId, text) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: text })
+    body: JSON.stringify({ chat_id: chatId, text: text
+                         })
   });
-}
+  }
