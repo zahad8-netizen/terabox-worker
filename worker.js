@@ -21,7 +21,7 @@ export default {
               const workerDomain = url.origin;
               const watchLink = `${workerDomain}/?id=${extractedId}`;
               
-              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा परमानेंट M3U8 वॉच लिंक तैयार है:\n\n${watchLink}`);
+              await sendTelegramMessage(chatId, `⚡ ले भाई तेरा एकदम पक्का M3U8 वॉच लिंक तैयार है:\n\n${watchLink}`);
             } else {
               await sendTelegramMessage(chatId, "❌ भाई सही Terabox लिंक भेज।");
             }
@@ -35,7 +35,7 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    return new Response(JSON.stringify({ status: "success", version: "NEW_M3U8_PLAYER_V3_FIXED" }), {
+    return new Response(JSON.stringify({ status: "success", version: "PYTHON_LOGIC_M3U8_FIXED" }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200
     });
@@ -47,19 +47,20 @@ async function handleVideoPlayback(videoId) {
     const teraboxFullLink = `https://terabox.com/s/${videoId}`;
     const apiUrl = `https://terabox.beer/api/terabox-new?link=${encodeURIComponent(teraboxFullLink)}`;
     
-    const apiRes = await fetch(apiUrl, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://terabox.beer/'
-      }
-    });
-    
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://terabox.beer/'
+    };
+
+    const apiRes = await fetch(apiUrl, { headers });
     const textData = await apiRes.text();
     let data;
     try {
       data = JSON.parse(textData);
     } catch (e) {
-      return new Response("API returned non-JSON response (Blocked or down)", { status: 500 });
+      return new Response("API returned non-JSON response", { status: 500 });
     }
 
     if (data && data.error === false) {
@@ -70,38 +71,43 @@ async function handleVideoPlayback(videoId) {
       }
 
       if (videoUrl) {
+        // Python style redirect & m3u8 extractor logic
         let finalM3u8Url = videoUrl;
-        try {
-          let currentUrl = videoUrl;
-          for (let i = 0; i < 3; i++) {
+        let currentUrl = videoUrl;
+        
+        for (let i = 0; i < 5; i++) {
+          try {
             const redirectRes = await fetch(currentUrl, {
               method: 'GET',
-              headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                'Referer': 'https://terabox.beer/'
-              },
+              headers: { ...headers, 'Referer': 'https://terabox.beer/' },
               redirect: 'manual'
             });
 
             if ([301, 302, 303, 307, 308].includes(redirectRes.status)) {
               const location = redirectRes.headers.get('Location');
               if (location) {
-                // FIXED: startsWith (capital S)
                 currentUrl = location.startsWith('http') ? location : new URL(location, currentUrl).href;
-                finalM3u8Url = currentUrl;
                 continue;
               }
             }
 
             const htmlText = await redirectRes.text();
-            const m3u8Match = htmlText.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
+            
+            // Regex patterns from your python code to find m3u8
+            const m3u8Match = htmlText.match(/(https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/) ||
+                              htmlText.match(/(https?:\/\/[^\s"'<>]+/playlist\.m3u8[^\s"'<>]*)/);
+                              
             if (m3u8Match && m3u8Match[1]) {
               finalM3u8Url = m3u8Match[1];
               break;
             }
+            
+            // Agar HTML ke andar direct videoUrl hi mila toh wahi use hoga
+            break;
+          } catch (err) {
             break;
           }
-        } catch (err) {}
+        }
 
         const html = `
           <!DOCTYPE html>
@@ -109,7 +115,7 @@ async function handleVideoPlayback(videoId) {
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>M3U8 Player</title>
+              <title>TeraBox Fast Player</title>
               <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
               <style>
                   body { background: #000; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; }
@@ -125,12 +131,12 @@ async function handleVideoPlayback(videoId) {
                       var hls = new Hls();
                       hls.loadSource(videoSrc);
                       hls.attachMedia(video);
-                      hls.on(Hls.Events.MANIFEST_PARSED,function() {
+                      hls.on(Hls.Events.MANIFEST_PARSED, function() {
                           video.play();
                       });
                   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                       video.src = videoSrc;
-                      video.addEventListener('loadedmetadata',function() {
+                      video.addEventListener('loadedmetadata', function() {
                           video.play();
                       });
                   }
@@ -143,7 +149,7 @@ async function handleVideoPlayback(videoId) {
         });
       }
     }
-    return new Response("Could not generate M3U8 stream from API data", { status: 500 });
+    return new Response("Could not extract stream link", { status: 500 });
   } catch (err) {
     return new Response("Error: " + err.message, { status: 500 });
   }
@@ -156,4 +162,4 @@ async function sendTelegramMessage(chatId, text) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text: text })
   });
-    }
+}
